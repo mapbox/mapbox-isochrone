@@ -21,9 +21,9 @@ Parameter | Required? | Default | Limits | Description
 `token` | Yes | n/a | --- |Mapbox user token
 `thresholds` | Yes | n/a | min:1, max: 3600 |Time thresholds for the desired ischrone(s), expressed in seconds. Can be expressed as either a) an array of numbers (e.g. `[600, 1200, 1800]`) to calculate isochrones at those specific time cutoffs, or b) a single number (e.g. `1800`) to calculate isochrones at 60-second intervals, up to that time
 `mode` | No | `driving` | one of `driving`, `cycling`, or `walking` | Method of transportation desired.
-`direction` | No | `divergent` | `divergent` or `convergent` | Direction of travel. `Divergent` isochrones are the total area reachable _from_ the origin within the given time, while `convergent` ones cover the total area that _can_ reach it. Most isochrones are assumed to be divergent.
+`direction` | No | `divergent` | `divergent` or `convergent` | Direction of travel. `Divergent` isochrones are the total area reachable _from_ the origin within the given time, while `convergent` ones cover the total area that _can_ reach it.
 `resolution` | No | 0.5 | min:0.05, max: 2 | Granularity of the underlying sample grid, in units of kilometers. Lower values yield finer results, but are more expensive in both query time and API request load. Scaling this value with both time threshold and speed of transport is recommended.
-`batchSize` | No | 25 | min: 2 | Number of coordinates per Matrix API request. The default value applies for 
+`batchSize` | No | 25 | min: 2 | Number of coordinates per Matrix API request. The default value applies for most Mapbox starter plans. Higher values will speed up computation and avoid rate-limiting issues.
 
 
 - `callback`
