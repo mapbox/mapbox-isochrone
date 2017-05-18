@@ -1,11 +1,11 @@
 var d3 = require('d3-request');
 var cheapRuler = require('cheap-ruler');
-var Conrec = require('../conrec.js');
+var Conrec = require('./lib/conrec.js');
 
 var turf = {
-    polygon: require('turf-polygon'),
-    point: require('turf-point'),
-    featureCollection: require('turf-featurecollection'),
+    polygon: require('@turf/helpers').polygon,
+    point: require('@turf/helpers').point,
+    featureCollection: require('@turf/helpers').featureCollection,
     inside: require('@turf/inside'),
     // union: require('turf-union'),
     // difference: require('turf-difference'),
@@ -13,8 +13,8 @@ var turf = {
 };
 
 //water calc
-var cover = require('tile-cover')
-var vt = require('@mapbox/vt2geojson')
+// var cover = require('tile-cover')
+// var vt = require('@mapbox/vt2geojson')
 
 function isochrone(startingPosition, parameters, cb){
 
