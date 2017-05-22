@@ -419,8 +419,11 @@ function isochrone(startingPosition, parameters, cb){
             });
         }
 
-        throw new Error(error)
-        if (error) return cb(new Error(error))
+
+        if (error) {
+            throw new Error(error)
+            return cb(new Error(error))
+        }
         else return parameters
     }
 }
