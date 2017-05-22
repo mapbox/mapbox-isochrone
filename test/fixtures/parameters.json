@@ -1,0 +1,11 @@
+{
+	"badToken": {
+		"token":null,
+		"threshold":60
+	},
+	"noThreshold": {
+		"token":"tokenString",
+		"threshold":null
+	}
+
+}

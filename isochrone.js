@@ -33,10 +33,10 @@ function isochrone(startingPosition, parameters, cb){
     // });
 
     //validate
-    parameters = validate(parameters);
+    parameters = validate(startingPosition, parameters, cb);
+    if (!parameters) return;
 
-
-    perf = performance.now();
+    //perf = performance.now();
 
 
     var constants = {
@@ -363,7 +363,8 @@ function isochrone(startingPosition, parameters, cb){
         return array
     }
 
-    function validate(parameters){
+    function validate(origin, parameters,cb){
+
         var validator = {
             token: {format: 'type', values:['string'], required:true},
             mode: {format: 'among', values:['driving', 'cycling', 'walking'], required:false, default: 'driving'},
@@ -374,43 +375,53 @@ function isochrone(startingPosition, parameters, cb){
             clipCoasts: {format:'type', values:['boolean'], required:false, default: false}
         }
 
-        Object.keys(validator).forEach(function(key){
-            var item = validator[key]
+        var error;
 
-            // make sure required parameters are present. if optional, fill in with default value
-            if (!parameters[key]) {
-                if(item.required) throw new Error(key+' required in query')
-                else parameters[key] = item.default
-            }
+        // validate starting position
+        if (!origin || typeof origin !=='object' || origin.length!== 2){
+            error = 'Starting position must be a longitude-latitude object, expressed as an array.'
+        }
 
-            // ensure parameter is of right type
-            if (item.format === 'type' && item.values.indexOf(typeof parameters[key]) ===-1) {
-                throw new Error(key+' must be a '+ item.values.join(' or '))
-            }
+        else {
+            Object.keys(validator).forEach(function(key){
+                var item = validator[key]
 
-            //ensure parameter holds a valid value
-            if (item.format === 'among' && item.values.indexOf(parameters[key]) ===-1) {
-                throw new Error(key+' must be '+ item.values.join(' or '))            
-            }
-
-            //ensure parameter falls within accepted range
-
-            if (item.format === 'range') {
-                if (parameters[key]>item.max || parameters[key]<item.min){
-                    throw new Error(key+' must be between '+ item.min+' and '+item.max)            
+                // make sure required parameters are present. if optional, fill in with default value
+                if (!parameters[key]) {
+                    if(item.required)  error = (key+' required in query')
+                    else parameters[key] = item.default
                 }
-            }
 
-            //special parsing for thresholds parameter
-            if (typeof parameters.threshold === 'object'){
-                if (!parameters.threshold.length || parameters.threshold.every(function(item){return typeof item === 'number'})){
-                    throw new Error('thresholds must be an array of numbers')            
-
+                // ensure parameter is of right type
+                else if (item.format === 'type' && item.values.indexOf(typeof parameters[key]) ===-1) {
+                    error = (key+' must be a '+ item.values.join(' or '))
                 }
-            }
-        });
 
-        return parameters
+                //ensure parameter holds a valid value
+                else if (item.format === 'among' && item.values.indexOf(parameters[key]) ===-1) {
+                    error = (key+' must be '+ item.values.join(' or '))            
+                }
+
+                //ensure parameter falls within accepted range
+
+                else if (item.format === 'range') {
+                    if (parameters[key]>item.max || parameters[key]<item.min){
+                        error = (key+' must be between '+ item.min+' and '+item.max)            
+                    }
+                }
+
+                //special parsing for thresholds parameter
+                if (typeof parameters.threshold === 'object'){
+                    if (!parameters.threshold.length || parameters.threshold.every(function(item){return typeof item === 'number'})){
+                        error = ('thresholds must be an array of numbers')            
+                    }
+                }
+            });
+        }
+
+        throw new Error(error)
+        if (error) return cb(new Error(error))
+        else return parameters
     }
 }
 

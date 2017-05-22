@@ -1,1 +1,1 @@
-window.isochrone = require('./isochrone.js');
+isochrone = require('./isochrone.js');
