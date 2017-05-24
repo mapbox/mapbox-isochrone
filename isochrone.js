@@ -6,38 +6,20 @@ var turf = {
     polygon: require('@turf/helpers').polygon,
     point: require('@turf/helpers').point,
     featureCollection: require('@turf/helpers').featureCollection,
-    inside: require('@turf/inside'),
-    // union: require('turf-union'),
-    // difference: require('turf-difference'),
-    // flatten: require('turf-flatten')
+    inside: require('@turf/inside')
 };
 
-//water calc
-// var cover = require('tile-cover')
-// var vt = require('@mapbox/vt2geojson')
 
 function isochrone(startingPosition, parameters, cb){
 
-    // var [x,y,z] = cover.tiles(turf.point(startingPosition).geometry,{min_zoom:8, max_zoom:8})[0]
-    // var waterGeometry;
-    // vt({
-    //     uri: 'https://b.tiles.mapbox.com/v4/mapbox.mapbox-streets-v7/'+ z+'/'+x+'/'+y +'.vector.pbf?access_token='+parameters.token,
-    //     layer: 'water'
-    // }, function (err, result) {
-
-    //     if (err) throw err;
-    //     waterGeometry = turf.flatten(result.features[0])
-    //     //console.log(waterGeometry);
-
-
-    // });
 
     //validate
     parameters = validate(startingPosition, parameters, cb);
     if (!parameters) return;
 
-    //perf = performance.now();
-
+    startingPosition = startingPosition.map(function(coord){
+        return parseFloat(coord.toFixed(6))
+    })
 
     var constants = {
         timeIncrement:60,
@@ -45,26 +27,23 @@ function isochrone(startingPosition, parameters, cb){
             'divergent': '?sources=0&destinations=all',
             'convergent': '?sources=all&destinations=0'
         },
-        startingGrid:2
+        startingGrid: 2
     };
 
     var state = {
         travelTimes: {},
         timeHopper: {},
         blacklist: [],
+        lngs:{},
+        lats:{},
+        timeMaximum: typeof parameters.threshold === 'number' ? parameters.threshold : Math.max.apply(null, parameters.threshold)
     }
 
-    var timeMaximum = typeof parameters.threshold === 'number' ? parameters.threshold : Math.max.apply(null, parameters.threshold);
-    var thresholds = typeof parameters.threshold === 'number' ? listOutIntegers(timeMaximum,constants.timeIncrement) : parameters.threshold;
-
+    state.thresholds = typeof parameters.threshold === 'number' ? listOutIntegers(state.timeMaximum,constants.timeIncrement) : parameters.threshold;
+    state.lngs[startingPosition[0]] = 0;
+    state.lats[startingPosition[1]] = 0;
 
     ruler = cheapRuler(startingPosition[1], 'miles');
-
-    var lngs = {};
-    var lats = {};
-
-    lngs[startingPosition[0]] = 0;
-    lats[startingPosition[1]] = 0;
 
     //track coords to request in each progressive round
 
@@ -90,20 +69,25 @@ function isochrone(startingPosition, parameters, cb){
             var horizontalMovement = ruler.destination(startingPosition, xDelta * cellSize, 90)
 
             //then move up/down
-            var verticalMovement = ruler.destination(horizontalMovement, yDelta * cellSize, 0)
+            var verticalMovement = 
+            ruler.destination(horizontalMovement, yDelta * cellSize, 0)
+            .map(function(coord){
+                return parseFloat(coord.toFixed(6))
+            })
 
-            lngs[verticalMovement[0]] = xDelta;
-            lats[verticalMovement[1]] = yDelta;
+            state.lngs[verticalMovement[0]] = xDelta;
+            state.lats[verticalMovement[1]] = yDelta;
 
             output.push(verticalMovement)
         }
+
         return output
     }
 
 
     function generateBuffer(center, dimensions){
 
-        var centerIndex = [lngs[center[0]], lats[center[1]]];
+        var centerIndex = [state.lngs[center[0]], state.lats[center[1]]];
         var diagonal = generateDiagonal(centerIndex, parameters.resolution*Math.pow(2,0.5), dimensions)
         var grid = [];
 
@@ -128,6 +112,7 @@ function isochrone(startingPosition, parameters, cb){
 
             //generate buffer
             var buffer = generateBuffer(toBuffer[t], radius)
+            
             // dedupe buffer points and drop ones that are already sampled
             buffer.forEach(function(pt){
 
@@ -135,6 +120,7 @@ function isochrone(startingPosition, parameters, cb){
                 state.travelTimes[pt] = true;
                 nextBatch.push(pt)
             })
+        
         }
         batchRequests(nextBatch)
     }
@@ -175,11 +161,13 @@ function isochrone(startingPosition, parameters, cb){
             var toBuffer = [];
 
             for (var i=1; i<coords.length; i++){
-
+                coords[i]
                 var time = durations[i]
                 var blacklisted = false;
+
                 // track occurrences of this time
                 if (!state.timeHopper[time]) state.timeHopper[time] = [];
+                
                 //check to see if this point is actually contiguous with others of the same time
                 else {
                     for (s in state.timeHopper[time]){
@@ -192,11 +180,11 @@ function isochrone(startingPosition, parameters, cb){
                 state.timeHopper[time].push(coords[i])
 
                 // write time to record
-                time = blacklisted ? [timeMaximum*2] : [time]
+                time = blacklisted ? [state.timeMaximum*2] : [time]
                 state.travelTimes[coords[i]] = time;
 
 
-                if (time < timeMaximum) {
+                if (time < state.timeMaximum) {
                     toBuffer.push(coords[i])
                 }
             }
@@ -206,10 +194,7 @@ function isochrone(startingPosition, parameters, cb){
             if (toBuffer.length>0) extendBuffer(toBuffer, 10)
 
             // when all callbacks received
-            else if (outstandingRequests === 0) {
-                //console.log(toBuffer.length, 'tobuffer')
-                polygonize()
-            }
+            else if (outstandingRequests === 0) polygonize()
         })
     }
 
@@ -219,8 +204,8 @@ function isochrone(startingPosition, parameters, cb){
 
         rawPoints = objectToArray(state.travelTimes, true);
 
-        lngs = objectToArray(lngs, false).sort(function(a, b){return a-b})
-        lats = objectToArray(lats, false).sort(function(a, b){return a-b}).reverse()
+        state.lngs = objectToArray(state.lngs, false).sort(function(a, b){return a-b})
+        state.lats = objectToArray(state.lats, false).sort(function(a, b){return a-b}).reverse()
 
         conrec()
 
@@ -231,13 +216,15 @@ function isochrone(startingPosition, parameters, cb){
             var twoDArray = [];
 
             var c = new Conrec.Conrec; 
-            for (r in lngs){
+
+            for (r in state.lngs){
 
                 var row = [];
 
-                for (d in lats){
-                    var coord = [lngs[r], lats[d]];
-                    if(!state.travelTimes[coord]) state.travelTimes[coord] = [timeMaximum*10,timeMaximum*10];
+                for (d in state.lats){
+                    var coord = [state.lngs[r]-0, state.lats[d]];
+                    if(!state.travelTimes[coord]) state.travelTimes[coord] = [state.timeMaximum*10];
+
                     var time = state.travelTimes[coord][0];
 
                     points.push(turf.point(coord,{time:time}));
@@ -250,7 +237,7 @@ function isochrone(startingPosition, parameters, cb){
             postPoints = turf.featureCollection(points);
 
             // build conrec
-            c.contour(twoDArray, 0, lngs.length-1, 0, lats.length-1, lngs, lats, thresholds.length, thresholds);
+            c.contour(twoDArray, 0, state.lngs.length-1, 0, state.lats.length-1, state.lngs, state.lats, state.thresholds.length, state.thresholds);
 
             contours = c.contourList()
             polygons = [];
@@ -412,7 +399,7 @@ function isochrone(startingPosition, parameters, cb){
 
                 //special parsing for thresholds parameter
                 if (typeof parameters.threshold === 'object'){
-                    if (!parameters.threshold.length || parameters.threshold.every(function(item){return typeof item === 'number'})){
+                    if (!parameters.threshold.length || !parameters.threshold.every(function(item){return typeof item === 'number'})){
                         error = ('thresholds must be an array of numbers')            
                     }
                 }
@@ -427,5 +414,6 @@ function isochrone(startingPosition, parameters, cb){
         else return parameters
     }
 }
+
 
 module.exports = exports = isochrone;
