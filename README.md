@@ -5,7 +5,10 @@ Isochrone generator built atop the Mapbox Matrix API, with CONREC polygonization
 
 ## Setup
 
+Clone the repository and either
 
+a) include `dist/app.js` in your markup directly, or
+b) build your own via `browserify index.js -o <filename>
 
 ## Usage
 
