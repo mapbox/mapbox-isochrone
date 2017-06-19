@@ -8,7 +8,7 @@ Isochrone generator built atop the Mapbox Matrix API, with CONREC polygonization
 Clone the repository and either
 
 - include `dist/app.js` in your markup directly, or
-- build your own via `browserify index.js -o <filename>
+- build your own via `browserify index.js -o <filename>`
 
 ## Usage
 
