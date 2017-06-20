@@ -132,10 +132,11 @@ function isochrone(startingPosition, parameters, cb){
     // route requests to smaller batches
     function batchRequests(coords){
 
-        outstandingRequests += Math.ceil(coords.length/parameters.batchSize);
+        var batchSize = parameters.batchSize-1;
+        outstandingRequests += Math.ceil(coords.length/batchSize);
 
-        for (var c = 0; c < coords.length; c+=parameters.batchSize){
-            var batch = coords.slice(c,c+parameters.batchSize);
+        for (var c = 0; c < coords.length; c+=batchSize){
+            var batch = coords.slice(c,c+batchSize);
             batch.unshift(startingPosition);
             makeRequest(batch)
         }
