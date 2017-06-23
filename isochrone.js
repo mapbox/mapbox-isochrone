@@ -356,7 +356,7 @@ function isochrone(startingPosition, parameters, cb){
         var validator = {
             token: {format: 'type', values:['string'], required:true},
             mode: {format: 'among', values:['driving', 'cycling', 'walking'], required:false, default: 'driving'},
-            direction: {format: 'among', values:['divergent', 'convergent'], required:false, default: 'driving'},
+            direction: {format: 'among', values:['divergent', 'convergent'], required:false, default: 'divergent'},
             threshold: {format: 'type', values:['number', 'object'], required:true},
             resolution: {format: 'range', min: 0.05, max: 2, required:false, default: 0.5},
             batchSize:{format:'range', min:2, max: Infinity, required:false, default:25},
