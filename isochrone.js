@@ -12,7 +12,6 @@ var turf = {
 
 function isochrone(startingPosition, parameters, cb){
 
-
     //validate
     parameters = validate(startingPosition, parameters, cb);
     if (!parameters) return;
@@ -32,8 +31,6 @@ function isochrone(startingPosition, parameters, cb){
 
     var state = {
         travelTimes: {},
-        timeHopper: {},
-        blacklist: [],
         lngs:{},
         lats:{},
         timeMaximum: typeof parameters.threshold === 'number' ? parameters.threshold : Math.max.apply(null, parameters.threshold)
@@ -43,7 +40,7 @@ function isochrone(startingPosition, parameters, cb){
     state.lngs[startingPosition[0]] = 0;
     state.lats[startingPosition[1]] = 0;
 
-    ruler = cheapRuler(startingPosition[1], 'miles');
+    ruler = cheapRuler(startingPosition[1], 'kilometers');
 
     //track coords to request in each progressive round
 
@@ -162,26 +159,15 @@ function isochrone(startingPosition, parameters, cb){
             var toBuffer = [];
 
             for (var i=1; i<coords.length; i++){
-                coords[i]
-                var time = durations[i]
-                var blacklisted = false;
 
-                // track occurrences of this time
-                if (!state.timeHopper[time]) state.timeHopper[time] = [];
-                
-                //check to see if this point is actually contiguous with others of the same time
-                else {
-                    for (s in state.timeHopper[time]){
-                        if (ruler.distance(state.timeHopper[time][s], coords[i])<parameters.resolution*1.6){
-                            blacklisted = true;
-                        }
-                    }
-                }
+                //calculate distance of grid coordinate from nearest neighbor on road, and 
+                var snapDistance = ruler.distance(resp.destinations[i].location, coords[i])
+                var snapPenalty = snapDistance>state.resolution/2 ? state.timeMaximum : Math.ceil(snapDistance * 900);
 
-                state.timeHopper[time].push(coords[i])
+
 
                 // write time to record
-                time = blacklisted ? [state.timeMaximum*2] : [time]
+                var time = [durations[i]+snapPenalty]
                 state.travelTimes[coords[i]] = time;
 
 
@@ -192,7 +178,7 @@ function isochrone(startingPosition, parameters, cb){
 
             outstandingRequests--;
 
-            if (toBuffer.length>0) extendBuffer(toBuffer, 10)
+            if (toBuffer.length>0) extendBuffer(toBuffer, 12)
 
             // when all callbacks received
             else if (outstandingRequests === 0) polygonize()
@@ -201,7 +187,6 @@ function isochrone(startingPosition, parameters, cb){
 
 
     function polygonize(){
-        //console.log(performance.now()-perf +' seconds')
 
         rawPoints = objectToArray(state.travelTimes, true);
 
