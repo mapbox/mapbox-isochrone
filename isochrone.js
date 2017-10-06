@@ -147,27 +147,33 @@ function isochrone(startingPosition, parameters, cb){
 
         var queryURL = 
         'https://api.mapbox.com/directions-matrix/v1/mapbox/'+ parameters.mode +'/' + formattedCoords + constants.queryURL[parameters.direction]+'&access_token=' + parameters.token;
-
         d3.json(queryURL, function(err, resp){
 
             var parseDurations = {
-                'divergent':resp.durations[0],
-                'convergent':resp.durations.map(function(item){return item[0]})
+                'divergent':{
+                    'data': resp.durations[0],
+                    'timeObj': 'destinations'
+                },
+                'convergent':{
+                    'data': resp.durations.map(function(item){return item[0]}),
+                    'timeObj': 'sources'
+                }
             };
 
-            var durations = parseDurations[parameters.direction];
+            var durations = parseDurations[parameters.direction].data;
             var toBuffer = [];
-
+            var times = resp[parseDurations[parameters.direction].timeObj];
+            
             for (var i=1; i<coords.length; i++){
 
-                //calculate distance of grid coordinate from nearest neighbor on road, and 
-                var snapDistance = ruler.distance(resp.destinations[i].location, coords[i])
-                var snapPenalty = snapDistance>state.resolution/2 ? state.timeMaximum : Math.ceil(snapDistance * 900);
+                //calculate distance of grid coordinate from nearest neighbor on road, and assess penalty appropriately
+                var snapDistance = ruler.distance(times[i].location, coords[i]);
+                var snapPenalty = snapDistance>state.resolution/2 ? state.timeMaximum : snapDistance * 1200;
 
 
 
                 // write time to record
-                var time = [durations[i]+snapPenalty]
+                var time = Math.ceil(parameters.fudgeFactor*durations[i]+snapPenalty);
                 state.travelTimes[coords[i]] = time;
 
 
@@ -193,7 +199,7 @@ function isochrone(startingPosition, parameters, cb){
         state.lngs = objectToArray(state.lngs, false).sort(function(a, b){return a-b})
         state.lats = objectToArray(state.lats, false).sort(function(a, b){return a-b}).reverse()
 
-        conrec()
+        conrec();
 
         function conrec(){
 
@@ -211,7 +217,7 @@ function isochrone(startingPosition, parameters, cb){
                     var coord = [state.lngs[r]-0, state.lats[d]];
                     if(!state.travelTimes[coord]) state.travelTimes[coord] = [state.timeMaximum*10];
 
-                    var time = state.travelTimes[coord][0];
+                    var time = state.travelTimes[coord];
 
                     points.push(turf.point(coord,{time:time}));
 
@@ -225,7 +231,7 @@ function isochrone(startingPosition, parameters, cb){
             // build conrec
             c.contour(twoDArray, 0, state.lngs.length-1, 0, state.lats.length-1, state.lngs, state.lats, state.thresholds.length, state.thresholds);
 
-            contours = c.contourList()
+            var contours = c.contourList()
             polygons = [];
 
             //iterate through contour hulls
@@ -264,12 +270,18 @@ function isochrone(startingPosition, parameters, cb){
 
             }
 
-            contours = polygons.map(function(vertices,seconds){
+            if (parameters.keepIslands) {
+                contours = polygons.map(function(vertices,seconds){
+                    return turf.polygon(vertices, {time: seconds});
+                }) 
+                .filter(function(item){
+                    return item !== null
+                })
+            }
 
-                if (!vertices.length) {return null;}
+            else {
 
-                else{
-
+                contours = polygons.map(function(vertices,seconds){
                     //remove all holes that aren't actually holes, but polygons outside the main polygon
                     for (var p = vertices.length-1; p >0; p--){
                         var ring = vertices[p];
@@ -291,12 +303,13 @@ function isochrone(startingPosition, parameters, cb){
                     });
 
                     return poly
-                }
 
-            })
-            .filter(function(item){
-                return item !== null
-            })
+                })
+                .filter(function(item){
+                    return item !== null
+                })
+            }
+
 
             hulls = turf.featureCollection(contours)
             travelTimes = state.travelTimes
@@ -339,13 +352,14 @@ function isochrone(startingPosition, parameters, cb){
     function validate(origin, parameters,cb){
 
         var validator = {
-            token: {format: 'type', values:['string'], required:true},
+            token: {format: 'type', values:['string'], required: true},
             mode: {format: 'among', values:['driving', 'cycling', 'walking'], required:false, default: 'driving'},
             direction: {format: 'among', values:['divergent', 'convergent'], required:false, default: 'divergent'},
             threshold: {format: 'type', values:['number', 'object'], required:true},
             resolution: {format: 'range', min: 0.05, max: 2, required:false, default: 0.5},
-            batchSize:{format:'range', min:2, max: Infinity, required:false, default:25},
-            clipCoasts: {format:'type', values:['boolean'], required:false, default: false}
+            batchSize: {format:'range', min:2, max: Infinity, required:false, default:25},
+            fudgeFactor: {format:'range', min:0.5, max: 2, required:false, default: 1},
+            keepIslands: {format:'type', values:['boolean'], required:false, default: false}
         }
 
         var error;
