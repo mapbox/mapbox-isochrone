@@ -3,10 +3,8 @@ var Conrec = require('./lib/conrec.js');
 
 // browsers have fetch at window.fetch
 // node requires module
-if (typeof window === 'undefined'){
-  var fetch = require('node-fetch');
-}
 
+fetch = typeof window === 'undefined' ? require('node-fetch') : fetch;
 
 var turf = {
     polygon: require('@turf/helpers').polygon,
