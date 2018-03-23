@@ -1,6 +1,10 @@
-var d3 = require('d3-request');
 var cheapRuler = require('cheap-ruler');
 var Conrec = require('./lib/conrec.js');
+
+// browsers have fetch at window.fetch
+// node requires module
+
+fetch = typeof window === 'undefined' ? require('node-fetch') : fetch;
 
 var turf = {
     polygon: require('@turf/helpers').polygon,
@@ -10,10 +14,11 @@ var turf = {
 };
 
 
-function isochrone(startingPosition, parameters, cb){
-
+function isochrone(startingPosition, parameters){
+  return new Promise((resolve, reject)=>{
     //validate
-    parameters = validate(startingPosition, parameters, cb);
+    var error;
+    parameters = validate(startingPosition, parameters);
     if (!parameters) return;
 
     startingPosition = startingPosition.map(function(coord){
@@ -66,7 +71,7 @@ function isochrone(startingPosition, parameters, cb){
             var horizontalMovement = ruler.destination(startingPosition, xDelta * cellSize, 90)
 
             //then move up/down
-            var verticalMovement = 
+            var verticalMovement =
             ruler.destination(horizontalMovement, yDelta * cellSize, 0)
             .map(function(coord){
                 return parseFloat(coord.toFixed(6))
@@ -109,7 +114,7 @@ function isochrone(startingPosition, parameters, cb){
 
             //generate buffer
             var buffer = generateBuffer(toBuffer[t], radius)
-            
+
             // dedupe buffer points and drop ones that are already sampled
             buffer.forEach(function(pt){
 
@@ -117,7 +122,7 @@ function isochrone(startingPosition, parameters, cb){
                 state.travelTimes[pt] = true;
                 nextBatch.push(pt)
             })
-        
+
         }
         batchRequests(nextBatch)
     }
@@ -145,10 +150,12 @@ function isochrone(startingPosition, parameters, cb){
             return [coord[0].toFixed(4), coord[1].toFixed(4)]
         }).join(';')
 
-        var queryURL = 
+        var queryURL =
         'https://api.mapbox.com/directions-matrix/v1/mapbox/'+ parameters.mode +'/' + formattedCoords + constants.queryURL[parameters.direction]+'&access_token=' + parameters.token;
-        d3.json(queryURL, function(err, resp){
 
+
+
+      function onResponse(resp){
             var parseDurations = {
                 'divergent':{
                     'data': resp.durations[0],
@@ -163,7 +170,7 @@ function isochrone(startingPosition, parameters, cb){
             var durations = parseDurations[parameters.direction].data;
             var toBuffer = [];
             var times = resp[parseDurations[parameters.direction].timeObj];
-            
+
             for (var i=1; i<coords.length; i++){
 
                 //calculate distance of grid coordinate from nearest neighbor on road, and assess penalty appropriately
@@ -188,7 +195,22 @@ function isochrone(startingPosition, parameters, cb){
 
             // when all callbacks received
             else if (outstandingRequests === 0) polygonize()
-        })
+        }
+
+        fetch(queryURL)
+          .then((data)=>{
+            if (data.status != 200){
+              error = "Did not receive status 200";
+            }
+            return data.json()
+              .then(onResponse)
+              .catch((err)=>{
+                error = err;
+              })
+          })
+          .catch((err)=>{
+            error = err;
+          })
     }
 
 
@@ -207,7 +229,7 @@ function isochrone(startingPosition, parameters, cb){
 
             var twoDArray = [];
 
-            var c = new Conrec.Conrec; 
+            var c = new Conrec.Conrec;
 
             for (r in state.lngs){
 
@@ -225,7 +247,7 @@ function isochrone(startingPosition, parameters, cb){
                 }
                 twoDArray.push(row)
 
-            }      
+            }
             postPoints = turf.featureCollection(points);
 
             // build conrec
@@ -245,7 +267,7 @@ function isochrone(startingPosition, parameters, cb){
 
                 // create a shape
                 var shape = []
-                
+
                 // map x-y to lng,lat array
                 for (var k = 0; k<contours[c].length; k++){
                     shape.push([contours[c][k].x, contours[c][k].y])
@@ -259,8 +281,8 @@ function isochrone(startingPosition, parameters, cb){
                 for (var p = shape.length; p<4; p++){
                     shape.push(shape[0]);
                 }
-                
-                //figure out if shape is an outer ring or an interior cavity, and slot it accordingly 
+
+                //figure out if shape is an outer ring or an interior cavity, and slot it accordingly
                 if (turf.inside(turf.point(startingPosition), turf.polygon([shape])) === true) {
                     polygons[level][0] = shape;
                 }
@@ -273,7 +295,7 @@ function isochrone(startingPosition, parameters, cb){
             if (parameters.keepIslands) {
                 contours = polygons.map(function(vertices,seconds){
                     return turf.polygon(vertices, {time: seconds});
-                }) 
+                })
                 .filter(function(item){
                     return item !== null
                 })
@@ -286,7 +308,7 @@ function isochrone(startingPosition, parameters, cb){
                     for (var p = vertices.length-1; p >0; p--){
                         var ring = vertices[p];
                         var r = 0;
-                        var soFarInside = true;    
+                        var soFarInside = true;
                         while (r < ring.length && soFarInside) {
                             var pointIsInside = turf.inside(turf.point(ring[r]), turf.polygon([vertices[0]]));
 
@@ -313,7 +335,7 @@ function isochrone(startingPosition, parameters, cb){
 
             hulls = turf.featureCollection(contours)
             travelTimes = state.travelTimes
-            cb(hulls)
+            resolve(hulls)
         }
 
     }
@@ -326,7 +348,7 @@ function isochrone(startingPosition, parameters, cb){
         if (!arrayOfArrays) return toNumbers(keys);
         var commaDelimitedNums = keys.map(function(coords){
             var commaDelimited = coords.split(',');
-            
+
             commaDelimited = toNumbers(commaDelimited)
             return commaDelimited
         });
@@ -336,7 +358,7 @@ function isochrone(startingPosition, parameters, cb){
 
     function toNumbers(strings){
         return strings.map(
-            function(string){ 
+            function(string){
                 return parseFloat(string)
             })
     }
@@ -349,7 +371,7 @@ function isochrone(startingPosition, parameters, cb){
         return array
     }
 
-    function validate(origin, parameters,cb){
+    function validate(origin, parameters){
 
         var validator = {
             token: {format: 'type', values:['string'], required: true},
@@ -361,8 +383,6 @@ function isochrone(startingPosition, parameters, cb){
             fudgeFactor: {format:'range', min:0.5, max: 2, required:false, default: 1},
             keepIslands: {format:'type', values:['boolean'], required:false, default: false}
         }
-
-        var error;
 
         // validate starting position
         if (!origin || typeof origin !=='object' || origin.length!== 2){
@@ -386,21 +406,21 @@ function isochrone(startingPosition, parameters, cb){
 
                 //ensure parameter holds a valid value
                 else if (item.format === 'among' && item.values.indexOf(parameters[key]) ===-1) {
-                    error = (key+' must be '+ item.values.join(' or '))            
+                    error = (key+' must be '+ item.values.join(' or '))
                 }
 
                 //ensure parameter falls within accepted range
 
                 else if (item.format === 'range') {
                     if (parameters[key]>item.max || parameters[key]<item.min){
-                        error = (key+' must be between '+ item.min+' and '+item.max)            
+                        error = (key+' must be between '+ item.min+' and '+item.max)
                     }
                 }
 
                 //special parsing for thresholds parameter
                 if (typeof parameters.threshold === 'object'){
                     if (!parameters.threshold.length || !parameters.threshold.every(function(item){return typeof item === 'number'})){
-                        error = ('thresholds must be an array of numbers')            
+                        error = ('thresholds must be an array of numbers')
                     }
                 }
             });
@@ -408,11 +428,12 @@ function isochrone(startingPosition, parameters, cb){
 
 
         if (error) {
-            throw new Error(error)
-            return cb(new Error(error))
+            // throw new Error(error)
+             reject(new Error(error))
         }
         else return parameters
     }
+  })
 }
 
 

@@ -9,18 +9,20 @@
   "author": "Peter Liu peterqliu@gmail.com",
   "license": "MIT",
   "dependencies": {
-    "d3-request": "^1.0.5",
-    "cheap-ruler": "^2.5.0",
-    "d3-request": "^1.0.5",
     "@turf/helpers": "^4.3.0",
-    "@turf/inside": "^3.10.3"
+    "@turf/inside": "^3.10.3",
+    "cheap-ruler": "^2.5.0",
+    "node-fetch": "^1.7.3"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mapbox/isochrone.git"
+    "url": "git+https://github.com/mapbox/mapbox-isochrone.git"
   },
   "bugs": {
-    "url": "https://github.com/mapbox/isochrone/issues"
+    "url": "https://github.com/mapbox/mapbox-isochrone/issues"
   },
-  "homepage": "https://github.com/mapbox/isochrone#readme"
+  "homepage": "https://github.com/mapbox/mapbox-isochrone#readme",
+  "devDependencies": {
+    "geojson-validation": "^0.2.0"
+  }
 }

@@ -6,6 +6,10 @@
 	"noThreshold": {
 		"token":"tokenString",
 		"threshold":null
+	},
+	"valid": {
+		"token":"pk.eyJ1Ijoic2NvdHRzZmFybGV5OTMiLCJhIjoiY2phdmRhNzM1MGRibTJwbWtsZXZoZnVlZiJ9.T495COeKNXFuIY4MonOMSA",
+		"threshold":60
 	}
 
 }
