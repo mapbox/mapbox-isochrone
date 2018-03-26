@@ -9,7 +9,6 @@ var turf = {
     inside: require('@turf/inside')
 };
 
-
 function isochrone(startingPosition, parameters, cb){
 
     //validate
@@ -49,7 +48,7 @@ function isochrone(startingPosition, parameters, cb){
 
 
     // kick off initial batch of queries
-    extendBuffer([startingPosition], constants.startingGrid)
+    extendBuffer([startingPosition], [constants.startingGrid])
 
     function generateDiagonal(centerOffset, cellSize, dimensions){
 
@@ -100,15 +99,14 @@ function isochrone(startingPosition, parameters, cb){
     }
 
     // takes the points that need buffering, and buffer them
-    function extendBuffer(toBuffer, radius){
+    function extendBuffer(toBuffer, radii){
 
         var nextBatch = [];
         var timesSoFar = Object.keys(state.travelTimes).length;
 
         for (t in toBuffer){
-
             //generate buffer
-            var buffer = generateBuffer(toBuffer[t], radius)
+            var buffer = generateBuffer(toBuffer[t], radii[t])
             
             // dedupe buffer points and drop ones that are already sampled
             buffer.forEach(function(pt){
@@ -125,7 +123,6 @@ function isochrone(startingPosition, parameters, cb){
 
     // route requests to smaller batches
     function batchRequests(coords){
-
         var batchSize = parameters.batchSize-1;
         outstandingRequests += Math.ceil(coords.length/batchSize);
 
@@ -162,6 +159,7 @@ function isochrone(startingPosition, parameters, cb){
 
             var durations = parseDurations[parameters.direction].data;
             var toBuffer = [];
+            var bufferRadii = [];
             var times = resp[parseDurations[parameters.direction].timeObj];
             
             for (var i=1; i<coords.length; i++){
@@ -176,21 +174,26 @@ function isochrone(startingPosition, parameters, cb){
                 var time = Math.ceil(parameters.fudgeFactor*durations[i]+snapPenalty);
                 state.travelTimes[coords[i]] = time;
 
-
-                if (time < state.timeMaximum) {
+                // add to buffer list
+                var timeLeft = state.timeMaximum - time
+                if (timeLeft > 0) {
                     toBuffer.push(coords[i])
+                    bufferRadii.push(calculateBufferRadius(timeLeft))
                 }
             }
-
             outstandingRequests--;
 
-            if (toBuffer.length>0) extendBuffer(toBuffer, 12)
+            if (toBuffer.length>0) extendBuffer(toBuffer, bufferRadii)
 
             // when all callbacks received
             else if (outstandingRequests === 0) polygonize()
+
         })
     }
 
+    function calculateBufferRadius(timeRemaining){
+        return 4
+    }
 
     function polygonize(){
 
