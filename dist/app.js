@@ -12,7 +12,6 @@ var turf = {
     inside: require('@turf/inside')
 };
 
-batchesFired = 0;
 function isochrone(startingPosition, parameters, cb){
 
     //validate
@@ -141,7 +140,7 @@ function isochrone(startingPosition, parameters, cb){
     // make API call, stows results in state.travelTimes, signals when all callbacks received
 
     function makeRequest(coords){
-        batchesFired++
+
         var formattedCoords = coords.map(function(coord, i){
             return [coord[0].toFixed(4), coord[1].toFixed(4)]
         }).join(';')
@@ -192,7 +191,6 @@ function isochrone(startingPosition, parameters, cb){
             // when all callbacks received
             else if (outstandingRequests === 0) polygonize()
 
-            console.log(batchesFired, 'batches')
         })
     }
 
