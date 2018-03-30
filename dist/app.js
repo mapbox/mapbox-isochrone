@@ -319,7 +319,7 @@ function isochrone(startingPosition, parameters, cb){
 
             hulls = turf.featureCollection(contours)
             travelTimes = state.travelTimes
-            cb(hulls)
+            cb(null, hulls)
         }
 
     }
