@@ -163,7 +163,7 @@ function isochrone(startingPosition, parameters, cb){
                 if (err.target.status === 429){
                     // if rate-limited, throw warn and retry in specified delay duration
                     console.warn(new Error('Matrix API rate limit exceeded. Retrying in 10 seconds. If this persists, consider increasing resolution value, or upgrading to an Enterprise account for higher rate limits https://www.mapbox.com/plans/'))
-                    setTimeout(function(){makeRequest(coords, queryURL)}, 10000)
+                    setTimeout(function(){makeRequest(coords, queryURL)}, state.retryDelay)
                 }
 
                 else cb(new Error(err))
