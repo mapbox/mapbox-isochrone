@@ -35,6 +35,9 @@ function isochrone(startingPosition, parameters, cb){
         travelTimes: {},
         lngs:{},
         lats:{},
+        snapTable:{},
+        outstandingRequests:0,
+        startTime: Date.now(),
         timeMaximum: typeof parameters.threshold === 'number' ? parameters.threshold : Math.max.apply(null, parameters.threshold)
     }
 
@@ -44,10 +47,6 @@ function isochrone(startingPosition, parameters, cb){
 
     ruler = cheapRuler(startingPosition[1], 'kilometers');
 
-    //track coords to request in each progressive round
-
-
-    var outstandingRequests = 0;
 
 
     // kick off initial batch of queries
@@ -127,7 +126,7 @@ function isochrone(startingPosition, parameters, cb){
     // route requests to smaller batches
     function batchRequests(coords){
         var batchSize = parameters.batchSize-1;
-        outstandingRequests += Math.ceil(coords.length/batchSize);
+        state.outstandingRequests += Math.ceil(coords.length/batchSize);
 
         for (var c = 0; c < coords.length; c+=batchSize){
             var batch = coords.slice(c,c+batchSize);
@@ -147,58 +146,76 @@ function isochrone(startingPosition, parameters, cb){
 
         var queryURL = 
         'https://api.mapbox.com/directions-matrix/v1/mapbox/'+ parameters.mode +'/' + formattedCoords + constants.queryURL[parameters.direction]+'&access_token=' + parameters.token;
+        
         d3.json(queryURL, function(err, resp){
 
-            var parseDurations = {
-                'divergent':{
-                    'data': resp.durations[0],
-                    'timeObj': 'destinations'
-                },
-                'convergent':{
-                    'data': resp.durations.map(function(item){return item[0]}),
-                    'timeObj': 'sources'
+            if (err) {
+                if (err.target.status === 429){
+                    cb(new Error('Rate limit exceeded. Standard Mapbox accounts are capped at 60 Matrix requests per second. Consider increasing resolution value, or upgrading to an Enterprise account for higher rate limits https://www.mapbox.com/plans/'))
+                    return
                 }
-            };
 
-            var durations = parseDurations[parameters.direction].data;
-            var toBuffer = [];
-            var bufferRadii = [];
-            var times = resp[parseDurations[parameters.direction].timeObj];
-            
-            for (var i=1; i<coords.length; i++){
-
-                //calculate distance of grid coordinate from nearest neighbor on road, and assess penalty appropriately
-                var snapDistance = ruler.distance(times[i].location, coords[i]);
-                var snapPenalty = snapDistance>state.resolution/2 ? state.timeMaximum : snapDistance * 1200;
-
-
-
-                // write time to record
-                var time = Math.ceil(parameters.fudgeFactor*durations[i]+snapPenalty);
-                state.travelTimes[coords[i]] = time;
-
-                // add to buffer list
-                var timeLeft = state.timeMaximum - time
-                if (timeLeft > 0) {
-                    toBuffer.push(coords[i])
-                    bufferRadii.push(calculateBufferRadius(timeLeft))
-                }
+                else cb(new Error(err))
             }
-            outstandingRequests--;
-
-            if (toBuffer.length>0) extendBuffer(toBuffer, bufferRadii)
-
-            // when all callbacks received
-            else if (outstandingRequests === 0) polygonize()
-
+            processData(coords, resp)
         })
     }
 
+    function processData(coords, resp){
+        var parseDurations = {
+            'divergent':{
+                'data': resp.durations[0],
+                'timeObj': 'destinations'
+            },
+            'convergent':{
+                'data': resp.durations.map(function(item){return item[0]}),
+                'timeObj': 'sources'
+            }
+        };
+
+        var durations = parseDurations[parameters.direction].data;
+        var toBuffer = [];
+        var bufferRadii = [];
+        var times = resp[parseDurations[parameters.direction].timeObj];
+        
+        for (var i=1; i<coords.length; i++){
+
+            //calculate distance of grid coordinate from nearest neighbor on road, and assess penalty appropriately
+            var snappedLocation = times[i].location;
+            var snapDistance = ruler.distance(snappedLocation, coords[i]);
+            var snapPenalty = snapDistance>state.resolution/2 ? state.timeMaximum : snapDistance * 1200;
+
+            // write time to record
+            var time = Math.ceil(parameters.fudgeFactor*durations[i]+snapPenalty);
+            state.travelTimes[coords[i]] = time;
+
+            // add to buffer list
+            var timeLeft = state.timeMaximum - time
+            if (timeLeft > 0 && !state.snapTable[snappedLocation]) {
+                toBuffer.push(coords[i])
+                bufferRadii.push(calculateBufferRadius(timeLeft))
+            }
+
+            state.snapTable[coords[i]] = snappedLocation;
+
+        }
+        state.outstandingRequests--;
+
+        if (toBuffer.length>0) extendBuffer(toBuffer, bufferRadii)
+
+        // when all callbacks received
+        else if (state.outstandingRequests === 0) polygonize()
+
+    }
+
     function calculateBufferRadius(timeRemaining){
-        return 4
+        var radius = Math.round(Math.min(Math.max(2,timeRemaining/60),6))*2
+        return 4// radius
     }
 
     function polygonize(){
+        
+        snapTable = state.snapTable;
 
         rawPoints = objectToArray(state.travelTimes, true);
 
@@ -288,6 +305,7 @@ function isochrone(startingPosition, parameters, cb){
             else {
 
                 contours = polygons.map(function(vertices,seconds){
+                    
                     //remove all holes that aren't actually holes, but polygons outside the main polygon
                     for (var p = vertices.length-1; p >0; p--){
                         var ring = vertices[p];
@@ -355,14 +373,14 @@ function isochrone(startingPosition, parameters, cb){
         return array
     }
 
-    function validate(origin, parameters,cb){
+    function validate(origin, parameters, cb){
 
         var validator = {
             token: {format: 'type', values:['string'], required: true},
             mode: {format: 'among', values:['driving', 'cycling', 'walking'], required:false, default: 'driving'},
             direction: {format: 'among', values:['divergent', 'convergent'], required:false, default: 'divergent'},
             threshold: {format: 'type', values:['number', 'object'], required:true},
-            resolution: {format: 'range', min: 0.05, max: 2, required:false, default: 0.5},
+            resolution: {format: 'range', min: 0.05, max: 3, required:false, default: 1},
             batchSize: {format:'range', min:2, max: Infinity, required:false, default:25},
             fudgeFactor: {format:'range', min:0.5, max: 2, required:false, default: 1},
             keepIslands: {format:'type', values:['boolean'], required:false, default: false}
@@ -417,6 +435,7 @@ function isochrone(startingPosition, parameters, cb){
             throw new Error(error)
             return cb(new Error(error))
         }
+
         else return parameters
     }
 }
