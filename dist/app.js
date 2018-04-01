@@ -24,6 +24,7 @@ function isochrone(startingPosition, parameters, cb){
 
     var constants = {
         timeIncrement:60,
+        retryDelay:10000,
         queryURL: {
             'divergent': '?sources=0&destinations=all',
             'convergent': '?sources=all&destinations=0'
@@ -126,7 +127,6 @@ function isochrone(startingPosition, parameters, cb){
     // route requests to smaller batches
     function batchRequests(coords){
         var batchSize = parameters.batchSize-1;
-        state.outstandingRequests += Math.ceil(coords.length/batchSize);
 
         for (var c = 0; c < coords.length; c+=batchSize){
             var batch = coords.slice(c,c+batchSize);
@@ -138,26 +138,46 @@ function isochrone(startingPosition, parameters, cb){
 
     // make API call, stows results in state.travelTimes, signals when all callbacks received
 
-    function makeRequest(coords){
+    function makeRequest(coords, preppedURL){
 
-        var formattedCoords = coords.map(function(coord, i){
-            return [coord[0].toFixed(4), coord[1].toFixed(4)]
-        }).join(';')
+        var queryURL;
 
-        var queryURL = 
-        'https://api.mapbox.com/directions-matrix/v1/mapbox/'+ parameters.mode +'/' + formattedCoords + constants.queryURL[parameters.direction]+'&access_token=' + parameters.token;
-        
+        // check if there's already a prepared URL string (from previously rate-limited attempt)
+
+        if (preppedURL) queryURL = preppedURL
+        else {
+
+            state.outstandingRequests++
+
+            var formattedCoords = coords.map(function(coord, i){
+                return [coord[0].toFixed(4), coord[1].toFixed(4)]
+            }).join(';')
+
+            var queryURL = 
+            'https://api.mapbox.com/directions-matrix/v1/mapbox/'+ parameters.mode +'/' + formattedCoords + constants.queryURL[parameters.direction]+'&access_token=' + parameters.token;
+            
+        }
+
         d3.json(queryURL, function(err, resp){
 
+            // if unsuccessful, throw hard/soft error depending on error type (soft if rate-limiting error)
             if (err) {
+
                 if (err.target.status === 429){
-                    cb(new Error('Rate limit exceeded. Standard Mapbox accounts are capped at 60 Matrix requests per second. Consider increasing resolution value, or upgrading to an Enterprise account for higher rate limits https://www.mapbox.com/plans/'))
-                    return
+                    // if rate-limited, throw warn and retry in specified delay duration
+                    console.warn(new Error('Matrix API rate limit exceeded. Retrying in 10 seconds. If this persists, consider increasing resolution value, or upgrading to an Enterprise account for higher rate limits https://www.mapbox.com/plans/'))
+                    setTimeout(function(){makeRequest(coords, queryURL)}, 10000)
                 }
 
                 else cb(new Error(err))
             }
-            processData(coords, resp)
+
+            // if successful, decrement counter and process data
+            else {
+                state.outstandingRequests--;
+                processData(coords, resp)
+            }
+
         })
     }
 
@@ -199,7 +219,6 @@ function isochrone(startingPosition, parameters, cb){
             state.snapTable[coords[i]] = snappedLocation;
 
         }
-        state.outstandingRequests--;
 
         if (toBuffer.length>0) extendBuffer(toBuffer, bufferRadii)
 
