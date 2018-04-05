@@ -414,9 +414,7 @@ function isochrone(startingPosition, parameters, cb){
         function computeResolution(){
             var timeMaximum = typeof parameters.threshold === 'number' ? parameters.threshold : Math.max.apply(null, parameters.threshold)
             var res = 4 * constants.relativeSpeeds[parameters.mode] * timeMaximum/3600
-            console.log(res)
             res = Math.max(Math.min(res, validator.resolution.max), validator.resolution.min)
-            console.log('resolution is', res)
             return res
         }
 
