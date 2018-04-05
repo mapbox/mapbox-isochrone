@@ -26,7 +26,12 @@ function isochrone(startingPosition, parameters, cb){
             'divergent': '?sources=0&destinations=all',
             'convergent': '?sources=all&destinations=0'
         },
-        startingGrid: 2
+        startingGrid: 2,
+        relativeSpeeds:{
+            'driving': 1,
+            'cycling':0.3,
+            'walking':0.1
+        }
     };
 
     var state = {
@@ -232,7 +237,7 @@ function isochrone(startingPosition, parameters, cb){
     function polygonize(){
         
         snapTable = state.snapTable;
-
+        internalState = state
         rawPoints = objectToArray(state.travelTimes, true);
 
         state.lngs = objectToArray(state.lngs, false).sort(function(a, b){return a-b})
@@ -396,7 +401,7 @@ function isochrone(startingPosition, parameters, cb){
             mode: {format: 'among', values:['driving', 'cycling', 'walking'], required:false, default: 'driving'},
             direction: {format: 'among', values:['divergent', 'convergent'], required:false, default: 'divergent'},
             threshold: {format: 'type', values:['number', 'object'], required:true},
-            resolution: {format: 'range', min: 0.05, max: 3, required:false, default: 1},
+            resolution: {format: 'range', min: 0.05, max: 5, required:false, default: 1},
             batchSize: {format:'range', min:2, max: Infinity, required:false, default:25},
             fudgeFactor: {format:'range', min:0.5, max: 2, required:false, default: 1},
             keepIslands: {format:'type', values:['boolean'], required:false, default: false}
@@ -447,10 +452,8 @@ function isochrone(startingPosition, parameters, cb){
         }
 
 
-        if (error) {
-            throw new Error(error)
-            return cb(new Error(error))
-        }
+        if (error) cb(new Error(error), null)
+
 
         else return parameters
     }
