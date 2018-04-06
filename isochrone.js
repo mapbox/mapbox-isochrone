@@ -11,14 +11,6 @@ var turf = {
 
 function isochrone(startingPosition, parameters, cb){
 
-    //validate
-    parameters = validate(startingPosition, parameters, cb);
-    if (!parameters) return;
-
-    startingPosition = startingPosition.map(function(coord){
-        return parseFloat(coord.toFixed(6))
-    })
-
     var constants = {
         timeIncrement:60,
         retryDelay:10000,
@@ -33,6 +25,15 @@ function isochrone(startingPosition, parameters, cb){
             'walking':0.1
         }
     };
+
+    //validate
+    parameters = validate(startingPosition, parameters, cb);
+    if (!parameters) return;
+
+    startingPosition = startingPosition.map(function(coord){
+        return parseFloat(coord.toFixed(6))
+    })
+
 
     var state = {
         travelTimes: {},
@@ -401,10 +402,17 @@ function isochrone(startingPosition, parameters, cb){
             mode: {format: 'among', values:['driving', 'cycling', 'walking'], required:false, default: 'driving'},
             direction: {format: 'among', values:['divergent', 'convergent'], required:false, default: 'divergent'},
             threshold: {format: 'type', values:['number', 'object'], required:true},
-            resolution: {format: 'range', min: 0.05, max: 5, required:false, default: 1},
             batchSize: {format:'range', min:2, max: Infinity, required:false, default:25},
             fudgeFactor: {format:'range', min:0.5, max: 2, required:false, default: 1},
-            keepIslands: {format:'type', values:['boolean'], required:false, default: false}
+            keepIslands: {format:'type', values:['boolean'], required:false, default: false},
+            resolution: {format: 'range', min: 0.05, max: 5, required:false},
+        }
+
+        function computeResolution(){
+            var timeMaximum = typeof parameters.threshold === 'number' ? parameters.threshold : Math.max.apply(null, parameters.threshold)
+            var res = 4 * constants.relativeSpeeds[parameters.mode] * timeMaximum/3600
+            res = Math.max(Math.min(res, validator.resolution.max), validator.resolution.min)
+            return res
         }
 
         var error;
@@ -421,7 +429,7 @@ function isochrone(startingPosition, parameters, cb){
                 // make sure required parameters are present. if optional, fill in with default value
                 if (!parameters[key]) {
                     if(item.required)  error = (key+' required in query')
-                    else parameters[key] = item.default
+                    else parameters[key] = item.default || computeResolution()
                 }
 
                 // ensure parameter is of right type
@@ -444,15 +452,14 @@ function isochrone(startingPosition, parameters, cb){
 
                 //special parsing for thresholds parameter
                 if (typeof parameters.threshold === 'object'){
-                    if (!parameters.threshold.length || !parameters.threshold.every(function(item){return typeof item === 'number'})){
-                        error = ('thresholds must be an array of numbers')            
+                    if (!parameters.threshold.length || !parameters.threshold.every(function(item){return typeof item === 'number' && item>=1 && item<=3600})){
+                        error = ('thresholds must be an array of numbers between 1 and 3600')            
                     }
                 }
             });
         }
 
-
-        if (error) cb(new Error(error), null)
+        if (error) return cb(new Error(error), null)
 
 
         else return parameters
