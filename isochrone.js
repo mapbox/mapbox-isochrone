@@ -453,13 +453,13 @@ function isochrone(startingPosition, parameters, cb){
                 //special parsing for thresholds parameter
                 if (typeof parameters.threshold === 'object'){
                     if (!parameters.threshold.length || !parameters.threshold.every(function(item){return typeof item === 'number' && item>=1 && item<=3600})){
-                        error = ('thresholds must be an array of numbers')            
+                        error = ('thresholds must be an array of numbers between 1 and 3600')            
                     }
                 }
             });
         }
 
-        if (error) cb(new Error(error), null)
+        if (error) return cb(new Error(error), null)
 
 
         else return parameters
