@@ -425,15 +425,14 @@ function isochrone(startingPosition, parameters, cb){
         else {
             Object.keys(validator).forEach(function(key){
                 var item = validator[key]
-
                 // make sure required parameters are present. if optional, fill in with default value
                 if (!parameters[key]) {
-                    if(item.required)  error = (key+' required in query')
-                    else parameters[key] = item.default || computeResolution()
+                    if (item.required) error = (key+' required in query')
+                    else parameters[key] = key === 'resolution' ? computeResolution() : item.default
                 }
 
                 // ensure parameter is of right type
-                else if (item.format === 'type' && item.values.indexOf(typeof parameters[key]) ===-1) {
+                if (item.format === 'type' && item.values.indexOf(typeof parameters[key]) === -1) {
                     error = (key+' must be a '+ item.values.join(' or '))
                 }
 
